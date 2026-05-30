@@ -11,11 +11,18 @@ export async function getCurrentUser() {
     throw new Error("Unauthorized");
   }
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("users")
     .select("*")
     .eq("id", user.id)
     .single();
+
+  // .single() sets error (PGRST116) when no row is found instead of
+  // returning null — surface it so callers get a clear failure rather
+  // than undefined fields cascading silently through the app.
+  if (error || !data) {
+    throw new Error("User profile not found");
+  }
 
   return data;
 }

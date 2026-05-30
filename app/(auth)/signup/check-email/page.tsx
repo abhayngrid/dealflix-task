@@ -1,11 +1,67 @@
-export default async function CheckEmailPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    email?: string;
-  }>;
-}) {
-  const { email } = await searchParams;
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+
+import { useSendMagicLink } from "@/features/auth/hooks/use-send-magic-link";
+
+const COOLDOWN_SECONDS = 60;
+
+export default function CheckEmailPage() {
+  const searchParams = useSearchParams();
+  const email = searchParams.get("email") ?? "";
+
+  const sendMagicLinkMutation = useSendMagicLink();
+
+  // Seconds remaining in the cooldown (0 = button is active).
+  // Starts at COOLDOWN_SECONDS because the email was just sent by the
+  // previous page — the user should wait before resending.
+  const [cooldown, setCooldown] = useState(COOLDOWN_SECONDS);
+  const [justSent, setJustSent] = useState(true);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function startCooldown() {
+    setCooldown(COOLDOWN_SECONDS);
+    setJustSent(true);
+
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    intervalRef.current = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(intervalRef.current!);
+          intervalRef.current = null;
+          setJustSent(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  // Start the cooldown as soon as the page mounts — the email was just sent.
+  useEffect(() => {
+    startCooldown();
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleResend() {
+    if (!email || cooldown > 0 || sendMagicLinkMutation.isPending) return;
+
+    sendMagicLinkMutation.mutate(email, {
+      onSuccess: () => {
+        startCooldown();
+      },
+    });
+  }
+
+  const isDisabled = cooldown > 0 || sendMagicLinkMutation.isPending || !email;
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -73,14 +129,37 @@ export default async function CheckEmailPage({
             Didn't get it? Check spam, or{" "}
             <button
               type="button"
-              className="font-sans not-italic font-semibold text-black hover:underline"
+              onClick={handleResend}
+              disabled={isDisabled}
+              className="font-sans not-italic font-semibold text-black hover:underline disabled:cursor-not-allowed disabled:text-zinc-400"
             >
-              resend the link
+              {sendMagicLinkMutation.isPending
+                ? "sending…"
+                : cooldown > 0
+                  ? `resend in ${cooldown}s`
+                  : "resend the link"}
             </button>
             .
           </p>
+
+          {/* Success feedback */}
+          {justSent && cooldown > 0 && (
+            <p className="mt-4 text-xs font-medium text-[#6ab534]">
+              ✓ New link sent — check your inbox
+            </p>
+          )}
+
+          {/* Error feedback */}
+          {sendMagicLinkMutation.isError && (
+            <p className="mt-4 text-xs font-medium text-red-500">
+              {sendMagicLinkMutation.error instanceof Error
+                ? sendMagicLinkMutation.error.message
+                : "Something went wrong. Please try again."}
+            </p>
+          )}
         </div>
       </main>
     </div>
   );
 }
+

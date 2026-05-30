@@ -167,6 +167,7 @@ export default function CompletePage() {
           >
             <button
               onClick={() => router.push(ROUTES.DASHBOARD)}
+              disabled={!user}
               className="
                 rounded-full
                 bg-black
@@ -175,13 +176,20 @@ export default function CompletePage() {
                 text-sm
                 font-bold
                 text-white
+                transition
+                hover:bg-zinc-800
+                disabled:cursor-not-allowed
+                disabled:bg-zinc-400
               "
             >
               Setup my marketplace →
             </button>
 
             <button
-              onClick={() => router.push(`/${user?.handle}`)}
+              onClick={() => {
+                if (user?.handle) router.push(`/${user.handle}`);
+              }}
+              disabled={!user?.handle}
               className="
                 rounded-full
                 border
@@ -191,6 +199,10 @@ export default function CompletePage() {
                 py-4
                 text-sm
                 font-semibold
+                transition
+                hover:border-black
+                disabled:cursor-not-allowed
+                disabled:opacity-50
               "
             >
               See my page
